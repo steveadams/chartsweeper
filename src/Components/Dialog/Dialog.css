@@ -1,0 +1,44 @@
+.dialog {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  border: 1px solid rgb(0, 0, 0);
+  background: rgb(238, 238, 238);
+  padding: 0;
+}
+
+.dialog header {
+  padding: 2px 4px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  background: rgb(53, 93, 213);
+  display: flex;
+  justify-content: space-between;
+}
+
+.dialog header button {
+  padding: 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  border: none;
+  background: transparent;
+}
+
+.dialog--fields {
+  padding: 4px;
+  display: flex;
+  flex-direction: row;
+  font-size: 16px;
+}
+
+.dialog input {
+  max-width: 48px;
+}
+
+.dialog footer {
+  padding: 4px 8px;
+  text-align: left;
+  background: rgb(221, 221, 221);
+}

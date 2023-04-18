@@ -1,0 +1,83 @@
+#root {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  font-family: sans-serif;
+  text-align: center;
+  width: 100%;
+}
+
+.chart-sweeper {
+  text-align: center;
+  margin: 0 auto;
+}
+
+.game {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: max-content;
+  background: rgb(189, 189, 189);
+  margin: 0 auto;
+  border: 2px outset;
+}
+
+.tools {
+  display: flex;
+  flex-gap: 4px;
+  margin-bottom: 8px;
+}
+
+.tools button {
+  color: rgb(53, 93, 213);
+  text-decoration: underline;
+  border: 0;
+  background: transparent;
+}
+
+.tools button:hover {
+  color: rgb(81, 125, 254);
+  text-decoration: underline;
+}
+
+.grid {
+  display: grid;
+  gap: 0;
+  font-family: monospace;
+  margin: 6px;
+  border: 2px inset;
+}
+
+.grid div {
+  margin: 0;
+  line-height: 12px;
+  font-size: 12px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px;
+  margin: 6px;
+  border-width: 2px;
+  border-style: inset;
+}
+
+.flag-counter, .timer {
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 18px;
+  background: #000;
+  color: red;
+  padding: 0px 4px;
+  pointer-events: none;
+}
+
+.emoji {
+  font-size: 16px;
+  text-align: center;
+  padding: 2px;
+  border: 2px outset;
+}
