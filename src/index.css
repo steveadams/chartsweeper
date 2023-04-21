@@ -37,9 +37,7 @@ h1 {
 
 /* TODO: Remove this after testing */
 .render-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
   border: 0;
   background: red;
   color: white;

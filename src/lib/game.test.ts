@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { initializeGrid } from './game';
-import { GameConfig } from '../Components/Chartsweeper';
+import type { CellContext } from '../machines/cellMachine';
+import type { GameMachineContext } from '../machines/gameMachine';
 
 describe('initializeGrid', () => {
-  const tests: GameConfig[] = [
+  const tests: GameMachineContext['config'][] = [
     { height: 10, width: 12, mines: 1 },
     { height: 20, width: 20, mines: 100 },
     { height: 300, width: 500, mines: 50_000 },
@@ -15,11 +16,18 @@ describe('initializeGrid', () => {
 
   it('initializeGrid', () => {
     tests.forEach((config) => {
-      const grid = initializeGrid(config);
+      const grid = initializeGrid(
+        config,
+        vi.fn().mockImplementation(({ isMine }: CellContext) => ({
+          getSnapshot: () => ({ context: { isMine } }),
+        }))
+      );
 
       expect(grid.length).toEqual(config.height);
       expect(grid[0].length).toEqual(config.width);
-      expect(grid.flat().filter((c) => c.mine).length).toEqual(config.mines);
+      expect(
+        grid.flat().filter((c) => c.getSnapshot()?.context.isMine).length
+      ).toEqual(config.mines);
     });
   });
 });

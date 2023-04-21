@@ -1,14 +1,17 @@
-import { CellProps } from '../Components/Cell/Cell';
-import { GameConfig, GameState } from '../Components/Chartsweeper';
+import type { GameMachineContext } from '../machines/gameMachine';
+import type { CellContext, CellMachineRef } from '../machines/cellMachine';
 
 // TODO: Improve mine placement algorithm
-export const initializeGrid = (config: GameConfig): CellProps[][] => {
-  const grid: CellProps[][] = [];
+const initializeGrid = (
+  config: GameMachineContext['config'],
+  cellSpawner: (cellContext: CellContext) => CellMachineRef
+): GameMachineContext['grid'] => {
+  const grid: GameMachineContext['grid'] = [];
   const totalCells = config.height * config.width;
   let remainingMines = config.mines;
 
   for (let row = 0; row < config.height; row++) {
-    const cells: CellProps[] = [];
+    const cells: CellMachineRef[] = [];
 
     for (let column = 0; column < config.width; column++) {
       // Calculate the remaining cells
@@ -24,8 +27,15 @@ export const initializeGrid = (config: GameConfig): CellProps[][] => {
         remainingMines--;
       }
 
-      // Use helper function to create a cell
-      cells.push({ mine: isMine, row, column });
+      cells.push(
+        cellSpawner({
+          isMine,
+          position: { y: row, x: column },
+          adjacentMines: 0,
+          traversed: false,
+          flagged: false,
+        })
+      );
     }
 
     grid.push(cells);
@@ -33,3 +43,5 @@ export const initializeGrid = (config: GameConfig): CellProps[][] => {
 
   return grid;
 };
+
+export { initializeGrid };

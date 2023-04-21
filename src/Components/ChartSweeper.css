@@ -65,7 +65,7 @@
   border-style: inset;
 }
 
-.flag-counter, .timer {
+.flagger, .timer {
   font-family: monospace;
   font-weight: bold;
   font-size: 18px;

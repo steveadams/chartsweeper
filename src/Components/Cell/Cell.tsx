@@ -1,91 +1,50 @@
-import { FC, useState } from 'react';
+import { FC } from 'react';
 import './Cell.css';
-import { match, P } from 'ts-pattern';
+import { P, match } from 'ts-pattern';
+import { useActor } from '@xstate/react';
 import classnames from 'classnames';
+import { CellMachineRef } from '../../machines/cellMachine';
 
 export interface CellProps {
-  mine: boolean;
-  row: number;
-  column: number;
+  cell: CellMachineRef;
 }
 
-type BaseCell = {
-  position: [x: number, y: number];
-};
+const Cell: FC<CellProps> = ({ cell }) => {
+  const [cellState, send] = useActor(cell);
 
-type UntouchedCell = BaseCell & {
-  adjacentMines: null;
-  traversed: false;
-  flagged: false;
-};
+  const toggleFlag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    send({ type: 'TOGGLE_FLAG' });
+  };
 
-type TraversedCell = BaseCell & {
-  adjacentMines: number;
-  traversed: true;
-  flagged: false;
-};
+  const onClick = (e: React.MouseEvent) => {
+    e.preventDefault();
 
-type FlaggedCell = BaseCell & {
-  adjacentMines: null;
-  traversed: false;
-  flagged: true;
-};
-
-type CellState = UntouchedCell | TraversedCell | FlaggedCell;
-
-const defaultState: UntouchedCell = {
-  position: [0, 0],
-  adjacentMines: null,
-  traversed: false,
-  flagged: false,
-};
-
-const Cell: FC<CellProps> = ({ mine, row, column }) => {
-  const [state, setState] = useState<CellState>(defaultState);
-
-  const content = match([state, mine])
-    .with([{ traversed: true }, true], () => '*')
-    .with([{ flagged: true }, P._], () => '>')
-    .with(
-      [{ adjacentMines: P.nullish }, P._],
-      [{ adjacentMines: 0 }, P._],
-      () => <>&nbsp;</>
-    )
-    .with([{ adjacentMines: P.number }, P._], ([cell]) =>
-      String(cell.adjacentMines)
-    )
-    .exhaustive();
-
-  const onClick = () => {
-    if (state.traversed) {
-      return;
-    }
-
-    if (mine) {
-      alert('You lose!');
+    // https://minesweeperonline.com/ uses e.ctrlKey, but I don't want to prevent context menus from opening
+    if (e.metaKey) {
+      toggleFlag(e);
     } else {
-      setState({
-        ...state,
-        adjacentMines: Math.floor(Math.random() * 8),
-        traversed: true,
-      } as TraversedCell);
+      send({ type: 'TRAVERSE' });
     }
   };
 
-  // TODO: bake classnames into state-based components so they can't be erroneously combined
+  const content = match(cellState.context)
+    .with({ traversed: true, isMine: true }, () => '*')
+    .with({ traversed: false, flagged: true }, () => '>')
+    .with({ traversed: true, flagged: false }, { adjacentMines: 0 }, () => ' ')
+    .with({ adjacentMines: P.select() }, (mines) => String(mines))
+    .exhaustive();
+
   return (
     <button
-      className={classnames('cell', {
-        'cell--traversed': state.traversed,
-        'cell--flagged': state.flagged,
-        'cell--untouched': !state.traversed && !state.flagged,
-        'cell--mine': mine,
-        'cell--clear': !mine && state.adjacentMines === 0,
-        [`cell--adjacent-${state.adjacentMines}`]:
-          !mine && state.adjacentMines && state.adjacentMines > 0,
+      className={classnames('cell', `cell--${cellState.value}`, {
+        'cell--mine': cellState.context.isMine,
+        [`cell--adjacent-${cellState.context.adjacentMines}`]:
+          !cellState.context.isMine && cellState.context.adjacentMines,
       })}
       type="button"
       onClick={onClick}
+      onContextMenu={toggleFlag}
     >
       {content}
     </button>

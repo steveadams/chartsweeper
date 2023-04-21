@@ -1,41 +1,24 @@
 import './ChartSweeper.css';
-import { useState } from 'react';
-import { Cell, CellProps } from './Cell/Cell';
-import { initializeGrid } from '../lib/game';
+import { FC, memo, useState } from 'react';
 import { Dialog } from './Dialog/Dialog';
 import { RenderCount } from './RenderCount';
+import { Timer } from './Timer/Timer';
+import { Flagger } from './Flagger/Flagger';
+import { GameMachineContext } from '../machines/gameMachine';
+import { GameMachineContext as GameContext } from '../Context/GameContext';
+import { Face } from './Face/Face';
+import { Grid } from './Grid/Grid';
 
-export interface GameConfig {
-  width: number;
-  height: number;
-  mines: number;
-}
+const ChartSweeper: FC = memo(() => {
+  const gameRef = GameContext.useActorRef();
 
-export interface GameState {
-  config: GameConfig;
-  grid: CellProps[][];
-}
+  // Hook into gameMachine events
+  // TODO: Move down the tree
+  const configure = (config: GameMachineContext['config']) =>
+    gameRef.send({ type: 'GAME.CONFIGURE', config });
 
-const defaultConfig: GameConfig = {
-  width: 30,
-  height: 20,
-  mines: 30,
-};
-
-function ChartSweeper() {
-  const [config, setConfig] = useState<GameConfig>(defaultConfig);
-  const [grid, setGrid] = useState(() => {
-    console.log('init grid');
-    return initializeGrid(defaultConfig);
-  });
+  // Config overlay
   const [showConfigOverlay, setShowConfigOverlay] = useState(false);
-
-  const reset = (withConfig: GameConfig) => {
-    setConfig(withConfig);
-    setGrid(initializeGrid(withConfig));
-  };
-  const resetWithCurrentSettings = () => setGrid(initializeGrid(config));
-
   const openConfigOverlay = () => setShowConfigOverlay(true);
   const closeConfigOverlay = () => setShowConfigOverlay(false);
 
@@ -46,24 +29,22 @@ function ChartSweeper() {
     const height = parseInt(e.currentTarget.height.value);
     const mines = parseInt(e.currentTarget.mines.value);
 
-    reset({ width, height, mines });
+    configure({ width, height, mines });
     setShowConfigOverlay(false);
   };
 
   return (
     <div className="chart-sweeper">
       <h1>ChartSweeper</h1>
-      <RenderCount />
+      <RenderCount label={'chartsweeper'} />
       <div className="tools">
         <button onClick={openConfigOverlay}>Game</button>
       </div>
       <main className="game">
         <div className="top-bar">
-          <div className="flag-counter">999</div>
-          <button className="emoji" onClick={resetWithCurrentSettings}>
-            😎
-          </button>
-          <div className="timer">000</div>
+          <Flagger />
+          <Face />
+          <Timer />
         </div>
 
         <Dialog isOpen={showConfigOverlay} close={closeConfigOverlay}>
@@ -84,22 +65,10 @@ function ChartSweeper() {
           </form>
         </Dialog>
 
-        <main
-          className="grid"
-          onMouseDown={() => console.log('down')}
-          onMouseUp={() => console.log('up')}
-        >
-          {grid.map((row) => (
-            <div key={row[0].row}>
-              {row.map((cell) => (
-                <Cell key={`${cell.row},${cell.column}`} {...cell} />
-              ))}
-            </div>
-          ))}
-        </main>
+        <Grid />
       </main>
     </div>
   );
-}
+});
 
 export { ChartSweeper };
