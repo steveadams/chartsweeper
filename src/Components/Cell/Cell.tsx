@@ -3,18 +3,26 @@ import './Cell.css';
 import { P, match } from 'ts-pattern';
 import { useActor } from '@xstate/react';
 import classnames from 'classnames';
-import { CellMachineRef } from '../../machines/cellMachine';
+import { CellMachine, CellMachineRef } from '../../machines/cellMachine';
+import { StateFrom } from 'xstate';
 
 export interface CellProps {
   cell: CellMachineRef;
 }
 
-const Cell: FC<CellProps> = ({ cell }) => {
+export const Cell: FC<CellProps> = ({ cell }) => {
   const [cellState, send] = useActor(cell);
 
   const toggleFlag = (e: React.MouseEvent) => {
     e.preventDefault();
-    send({ type: 'TOGGLE_FLAG' });
+
+    if (cellState.can({ type: 'REQUEST_FLAG' })) {
+      send({ type: 'REQUEST_FLAG', cell });
+    }
+
+    if (cellState.can({ type: 'RETURN_FLAG' })) {
+      send({ type: 'RETURN_FLAG', cell });
+    }
   };
 
   const onClick = (e: React.MouseEvent) => {
@@ -24,15 +32,37 @@ const Cell: FC<CellProps> = ({ cell }) => {
     if (e.metaKey) {
       toggleFlag(e);
     } else {
-      send({ type: 'TRAVERSE' });
+      if (cellState.can({ type: 'TRAVERSE' })) {
+        send({ type: 'TRAVERSE' });
+      }
     }
   };
 
-  const content = match(cellState.context)
-    .with({ traversed: true, isMine: true }, () => '*')
-    .with({ traversed: false, flagged: true }, () => '>')
-    .with({ traversed: true, flagged: false }, { adjacentMines: 0 }, () => ' ')
-    .with({ adjacentMines: P.select() }, (mines) => String(mines))
+  const startReveal = (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    if (e.button === 0) {
+      send({ type: 'START_REVEAL' });
+    }
+  };
+
+  const endReveal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (cellState.matches({ value: 'revealing' })) {
+      send({ type: 'END_REVEAL' });
+    }
+  };
+
+  const content = match(cellState)
+    .with({ value: 'exploded' }, () => '*')
+    .with({ value: 'flagged' }, () => '>')
+    .with(
+      { value: 'traversed' },
+      { value: 'untouched' },
+      { context: { adjacentMines: 0 } },
+      () => ' '
+    )
+    .with({ context: { adjacentMines: P.select() } }, (mines) => String(mines))
     .exhaustive();
 
   return (
@@ -40,9 +70,11 @@ const Cell: FC<CellProps> = ({ cell }) => {
       className={classnames('cell', `cell--${cellState.value}`, {
         'cell--mine': cellState.context.isMine,
         [`cell--adjacent-${cellState.context.adjacentMines}`]:
-          !cellState.context.isMine && cellState.context.adjacentMines,
+          cellState.matches('traversed'),
       })}
       type="button"
+      onMouseDown={startReveal}
+      onMouseUp={endReveal}
       onClick={onClick}
       onContextMenu={toggleFlag}
     >
@@ -50,5 +82,3 @@ const Cell: FC<CellProps> = ({ cell }) => {
     </button>
   );
 };
-
-export { Cell };

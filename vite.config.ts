@@ -8,4 +8,7 @@ export default defineConfig({
       jsxImportSource: '@welldone-software/why-did-you-render',
     }),
   ],
+  define: {
+    'process.env': process.env,
+  },
 });

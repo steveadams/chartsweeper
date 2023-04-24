@@ -19,6 +19,7 @@
 .cell--traversed {
   border-style: solid;
   border-width: 1px;
+  pointer-events: none;
 }
 
 .cell--mine {

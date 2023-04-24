@@ -1,39 +1,74 @@
-import { createMachine, assign } from 'xstate';
+import { createMachine, assign, StateFrom } from 'xstate';
+import { CellMachineRef } from './cellMachine';
 
 interface FlagContext {
-  flags: number;
+  availableFlags: number;
 }
 
-type FlagEvent = { type: 'ADD' } | { type: 'REMOVE' } | { type: 'RESET' };
+type FlagEvent =
+  | { type: 'RESET' }
+  | { type: 'CELL.REQUEST_FLAG'; cell: CellMachineRef }
+  | { type: 'CELL.RETURN_FLAG'; cell: CellMachineRef };
 
-type FlagMachine = typeof flagMachine;
+export type FlagMachine = typeof flagMachine;
+export type FlagMachineState = StateFrom<FlagMachine>;
 
-const flagMachine = createMachine<FlagContext, FlagEvent>(
+export const flagMachine = createMachine<FlagContext, FlagEvent>(
   {
     id: 'flagger',
-    context: {
-      flags: 0,
-    },
+    context: ({ input }) => ({
+      availableFlags: 0,
+      ...input,
+    }),
     on: {
-      ADD: { actions: 'add' },
-      REMOVE: { actions: 'remove' },
+      'CELL.REQUEST_FLAG': { actions: 'provideFlag', guard: 'hasFlags' },
+      'CELL.RETURN_FLAG': { actions: 'retrieveFlag' },
       RESET: { actions: 'reset' },
+      '*': {
+        actions: ({ event }) => console.log('flag event', event),
+      },
     },
   },
   {
     actions: {
-      add: assign({
-        flags: ({ context }) => context.flags + 1,
+      provideFlag: assign({
+        availableFlags: ({ context, event }) => {
+          if (event.type === 'CELL.REQUEST_FLAG') {
+            const { cell } = event;
+            const cellState = event.cell.getSnapshot();
+
+            if (cellState) {
+              console.log('flagger: REQUEST_FLAG – ADD_FLAG');
+              cell.send({ type: 'PLANT_FLAG' });
+
+              return context.availableFlags - 1;
+            } else {
+              console.log('flagger: REQUEST_FLAG');
+            }
+          }
+
+          return context.availableFlags;
+        },
       }),
-      remove: assign({
-        flags: ({ context }) => context.flags - 1,
+      retrieveFlag: assign({
+        availableFlags: ({ context, event }) => {
+          if (event.type === 'CELL.RETURN_FLAG') {
+            const { cell } = event;
+            console.log('flagger: RETURN_FLAG');
+            cell.send({ type: 'REMOVE_FLAG' });
+
+            return context.availableFlags + 1;
+          }
+
+          return context.availableFlags;
+        },
       }),
       reset: assign({
-        flags: 0,
+        availableFlags: 0,
       }),
+    },
+    guards: {
+      hasFlags: ({ context }) => context.availableFlags > 0,
     },
   }
 );
-
-export { flagMachine };
-export type { FlagContext, FlagEvent, FlagMachine };

@@ -1,5 +1,4 @@
 import { FC } from 'react';
-import { GameConfig } from '../Chartsweeper';
 import './Dialog.css';
 
 interface DialogProps extends React.HTMLAttributes<HTMLDialogElement> {

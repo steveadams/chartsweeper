@@ -5,7 +5,7 @@ import { RenderCount } from './RenderCount';
 import { Timer } from './Timer/Timer';
 import { Flagger } from './Flagger/Flagger';
 import { GameMachineContext } from '../machines/gameMachine';
-import { GameMachineContext as GameContext } from '../Context/GameContext';
+import { GameMachineContext as GameContext } from '../Context/GameMachineContext';
 import { Face } from './Face/Face';
 import { Grid } from './Grid/Grid';
 

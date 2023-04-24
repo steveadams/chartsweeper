@@ -1,8 +1,8 @@
-import { createMachine, assign, sendTo, StateFrom } from 'xstate';
+import { createMachine, assign, sendTo, StateFrom, forwardTo } from 'xstate';
 import { initializeGrid } from '../lib/game';
 import { timerMachine } from './timerMachine';
-import { flagMachine } from './flagMachine';
 import { createCellMachine, CellMachineRef } from './cellMachine';
+import { flagMachine } from './flagMachine';
 
 type GameEvent =
   | { type: 'GAME.CONFIGURE'; config: GameMachineContext['config'] }
@@ -10,13 +10,16 @@ type GameEvent =
   | { type: 'GAME.LOSE'; win: boolean }
   | { type: 'GAME.TICK' }
   | { type: 'GAME.TIMES_UP' }
-  | { type: 'GAME.MOUSE_DOWN' }
-  | { type: 'GAME.MOUSE_UP' }
+  // | { type: 'GAME.MOUSE_DOWN' }
+  // | { type: 'GAME.MOUSE_UP' }
   // Events sent from cells
-  | { type: 'CELL.ADD_FLAG' }
-  | { type: 'CELL.REMOVE_FLAG' }
+  | { type: 'CELL.STARTED_REVEALING' }
+  | { type: 'CELL.STOPPED_REVEALING' }
   | { type: 'CELL.TRAVERSE' }
-  | { type: 'CELL.EXPLODE' };
+  | { type: 'CELL.EXPLODE' }
+  | { type: 'CELL.REQUEST_FLAG' }
+  | { type: 'CELL.RETURN_FLAG' }
+  | { type: 'PLANT_FLAG' };
 
 interface GameConfig {
   width: number;
@@ -24,59 +27,48 @@ interface GameConfig {
   mines: number;
 }
 
-interface GameMachineContext {
+export interface GameMachineContext {
   config: GameConfig;
   grid: CellMachineRef[][];
   clearedCells: number;
-  flagsRemaining: number;
-  elapsedTime: number;
-  mouseDown: boolean;
+  revealing: boolean;
 }
 
-type GameMachine = typeof createGameMachine;
-type GameMachineState = StateFrom<GameMachine>;
+export type GameMachine = typeof createGameMachine;
+export type GameMachineState = StateFrom<GameMachine>;
 
 const defaultConfig: GameMachineContext['config'] = {
   width: 30,
   height: 20,
-  mines: 30,
+  mines: 5,
 };
 
-const createGameMachine = (config = defaultConfig) => {
-  console.log('creating game machine');
-  return createMachine<GameMachineContext, GameEvent>(
+export const createGameMachine = (config = defaultConfig) =>
+  createMachine<GameMachineContext, GameEvent>(
     {
       id: 'game',
       context: {
         config,
         grid: [],
         clearedCells: 0,
-        flagsRemaining: 0,
-        elapsedTime: 0,
-        mouseDown: false,
+        revealing: false,
       },
       invoke: [
+        { id: 'timer', systemId: 'timer', src: 'timer' },
         {
           id: 'flagger',
           systemId: 'flagger',
           src: 'flagger',
-        },
-        {
-          id: 'timer',
-          src: 'timer',
-          systemId: 'timer',
+          input: { availableFlags: config.mines },
         },
       ],
       initial: 'loading',
       on: {
+        'GAME.RESET': {
+          target: '.loading',
+        },
         'GAME.CONFIGURE': {
           actions: ['setConfiguration', 'reset'],
-        },
-        'CELL.ADD_FLAG': {
-          actions: 'addFlag',
-        },
-        'CELL.REMOVE_FLAG': {
-          actions: 'removeFlag',
         },
         'GAME.TICK': {
           actions: 'incrementTime',
@@ -84,8 +76,30 @@ const createGameMachine = (config = defaultConfig) => {
         'GAME.TIMES_UP': {
           actions: 'stopTimer',
         },
+        'CELL.STARTED_REVEALING': {
+          actions: 'startRevealing',
+        },
+        'CELL.STOPPED_REVEALING': {
+          actions: 'stopRevealing',
+        },
+        'CELL.REQUEST_FLAG': {
+          actions: forwardTo('flagger'),
+        },
+        'CELL.RETURN_FLAG': {
+          actions: forwardTo('flagger'),
+        },
+        PLANT_FLAG: {
+          actions: () => console.log('plant flag'),
+        },
+        '*': {
+          actions: ({ event }) => console.log('game event', event),
+        },
       },
       states: {
+        reset: {
+          entry: ['clearGrid', 'resetProgress', 'resetTimer'],
+          always: 'loading',
+        },
         loading: {
           entry: ['initializeGrid'],
           always: 'ready',
@@ -101,32 +115,22 @@ const createGameMachine = (config = defaultConfig) => {
         playing: {
           entry: ['startTimer'],
           on: {
-            'CELL.EXPLODE': {
-              target: 'lose',
-              actions: 'showLoseFace',
+            'CELL.EXPLODE': { target: 'lose' },
+            'CELL.TRAVERSE': {
+              actions: () => console.log('traverse'),
             },
           },
+          exit: ({ event }) => console.log('playing exit', event),
           always: {
             target: 'win',
-            guard: ({ context }) =>
-              context.clearedCells ===
-              context.config.width * context.config.height -
-                context.config.mines,
+            guard: 'allCellsCleared',
           },
         },
         win: {
-          type: 'final',
-          on: {
-            'GAME.RESET': 'loading',
-          },
-          entry: ['showWinFace'],
+          entry: [() => console.log('you win!')],
         },
         lose: {
-          type: 'final',
-          entry: ['showAllMines', 'showLoseFace'],
-          on: {
-            'GAME.RESET': 'loading',
-          },
+          entry: ['showAllMines', () => console.log('you lose!')],
         },
       },
     },
@@ -136,26 +140,26 @@ const createGameMachine = (config = defaultConfig) => {
           config: ({ context, event }) =>
             event.type === 'GAME.CONFIGURE' ? event.config : context.config,
         }),
+
+        resetProgress: assign({ clearedCells: 0 }),
+        clearGrid: ({ context }) => {
+          // Stop existing cells
+          context.grid.forEach((cells) => cells.forEach((cell) => cell.stop()));
+          context.grid = [];
+        },
+
         initializeGrid: assign({
           grid: ({ context, spawn }) =>
-            initializeGrid(context.config, (cellContext) => {
-              // Stop existing cells
-              context.grid.forEach((cells) =>
-                cells.forEach((cell) => cell.stop())
-              );
-
-              return spawn(createCellMachine(cellContext), {
+            initializeGrid(context.config, (cellContext) =>
+              spawn(createCellMachine(cellContext), {
                 id: `cell-${cellContext.position.x},${cellContext.position.y}`,
-              });
-            }),
-          flagsRemaining: ({ context }) => context.config.mines,
+              })
+            ),
         }),
-        addFlag: assign({
-          flagsRemaining: ({ context }) => context.flagsRemaining - 1,
-        }),
-        removeFlag: assign({
-          flagsRemaining: ({ context }) => context.flagsRemaining + 1,
-        }),
+
+        startRevealing: assign({ revealing: true }),
+        stopRevealing: assign({ revealing: false }),
+
         showAllMines: ({ context }) => {
           let actions: ReturnType<typeof sendTo>[] = [];
 
@@ -167,12 +171,17 @@ const createGameMachine = (config = defaultConfig) => {
 
           return actions;
         },
+
         startTimer: sendTo('timer', { type: 'START' }),
         stopTimer: sendTo('timer', { type: 'STOP' }),
+        resetTimer: () => {
+          console.log('reset timer');
+          return sendTo('timer', { type: 'RESET' });
+        },
       },
       guards: {
-        minesRemaining: ({ context }) =>
-          context.clearedCells !==
+        allCellsCleared: ({ context }) =>
+          context.clearedCells ===
           context.config.width * context.config.height - context.config.mines,
       },
       actors: {
@@ -181,8 +190,3 @@ const createGameMachine = (config = defaultConfig) => {
       },
     }
   );
-};
-
-export { createGameMachine };
-
-export type { GameMachine, GameMachineState, GameMachineContext, GameEvent };

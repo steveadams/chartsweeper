@@ -2,7 +2,7 @@ import type { GameMachineContext } from '../machines/gameMachine';
 import type { CellContext, CellMachineRef } from '../machines/cellMachine';
 
 // TODO: Improve mine placement algorithm
-const initializeGrid = (
+export const initializeGrid = (
   config: GameMachineContext['config'],
   cellSpawner: (cellContext: CellContext) => CellMachineRef
 ): GameMachineContext['grid'] => {
@@ -32,8 +32,6 @@ const initializeGrid = (
           isMine,
           position: { y: row, x: column },
           adjacentMines: 0,
-          traversed: false,
-          flagged: false,
         })
       );
     }
@@ -43,5 +41,3 @@ const initializeGrid = (
 
   return grid;
 };
-
-export { initializeGrid };
