@@ -114,8 +114,9 @@ export const createCellMachine = ({
           wasScanned: true,
         }),
         internalScan: actions.pure(({ context, event }) => {
+          const sends: ReturnType<typeof sendTo>[] = [];
+
           if (event.type === 'REVEAL') {
-            const sends: ReturnType<typeof sendTo>[] = [];
             const directions = [
               [-1, -1],
               [-1, 0],
@@ -136,15 +137,19 @@ export const createCellMachine = ({
                 continue;
               }
 
+              console.log(
+                `send from ${makeCellKey(context.coordinates)} to ${makeCellKey(
+                  { row, column }
+                )}`
+              );
+
               sends.push(
                 sendTo(makeCellKey({ row, column }), { type: 'SCAN_REQUEST' })
               );
             }
-
-            return sends;
           }
 
-          return [];
+          return sends;
         }),
         externalScan: actions.pure(({ context, event }) => {
           console.log('externalScan at ', context.coordinates);
