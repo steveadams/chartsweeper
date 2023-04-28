@@ -31,15 +31,9 @@ export const timerMachine = createMachine<TimerContext, TimerEvent>(
       elapsedTime: 0,
       duration: 999,
     },
-    on: {
-      RESET: '.idle',
-      '*': {
-        actions: ({ event }) => console.log('timer event', event),
-      },
-    },
     states: {
       idle: {
-        entry: ['reset', () => console.log('timer is idle')],
+        entry: ['reset'],
         on: {
           START: 'running',
         },
@@ -54,6 +48,7 @@ export const timerMachine = createMachine<TimerContext, TimerEvent>(
           TICK: {
             actions: ['incrementTime'],
           },
+          RESET: 'idle',
         },
 
         always: [{ target: 'stopped', guard: 'timeExpired' }],

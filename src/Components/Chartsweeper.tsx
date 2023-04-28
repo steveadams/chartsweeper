@@ -36,6 +36,7 @@ const ChartSweeper: FC = memo(() => {
   return (
     <div className="chart-sweeper">
       <h1>ChartSweeper</h1>
+
       <RenderCount label={'chartsweeper'} />
       <div className="tools">
         <button onClick={openConfigOverlay}>Game</button>
@@ -64,7 +65,6 @@ const ChartSweeper: FC = memo(() => {
             </footer>
           </form>
         </Dialog>
-
         <Grid />
       </main>
     </div>

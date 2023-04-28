@@ -5,7 +5,7 @@ import type { TimerMachineState } from '../machines/timerMachine';
 export const selectGrid = (state: GameMachineState) => state.context.grid;
 
 export const selectAvailableFlags = (state: FlagMachineState) =>
-  state.context.availableFlags;
+  state.context.flags - state.context.usedFlags;
 
 export const selectElapsedTime = (state: TimerMachineState) =>
   state.context.elapsedTime;

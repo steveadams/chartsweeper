@@ -11,12 +11,12 @@
   overflow: hidden;
 }
 
-.cell--untouched, .cell--flagged {
+.cell--covered, .cell--flagged {
   border-style: outset;
   border-width: 2px;
 }
 
-.cell--traversed {
+.cell--clear {
   border-style: solid;
   border-width: 1px;
   pointer-events: none;

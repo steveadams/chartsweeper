@@ -1,74 +1,70 @@
-import { createMachine, assign, StateFrom } from 'xstate';
+import {
+  createMachine,
+  assign,
+  StateFrom,
+  EventFrom,
+  ContextFrom,
+  actions,
+} from 'xstate';
 import { CellMachineRef } from './cellMachine';
 
 interface FlagContext {
-  availableFlags: number;
+  flags: number;
+  usedFlags: number;
 }
-
-type FlagEvent =
-  | { type: 'RESET' }
-  | { type: 'CELL.REQUEST_FLAG'; cell: CellMachineRef }
-  | { type: 'CELL.RETURN_FLAG'; cell: CellMachineRef };
 
 export type FlagMachine = typeof flagMachine;
 export type FlagMachineState = StateFrom<FlagMachine>;
+export type FlagEvent =
+  | { type: 'RESET' }
+  | { type: 'REQUEST_FLAG'; cell: CellMachineRef }
+  | { type: 'RETURN_FLAG'; cell: CellMachineRef };
 
 export const flagMachine = createMachine<FlagContext, FlagEvent>(
   {
     id: 'flagger',
-    context: ({ input }) => ({
-      availableFlags: 0,
+    context: ({ input }: { input: Partial<FlagContext> }) => ({
+      flags: 0,
+      usedFlags: 0,
       ...input,
     }),
     on: {
-      'CELL.REQUEST_FLAG': { actions: 'provideFlag', guard: 'hasFlags' },
-      'CELL.RETURN_FLAG': { actions: 'retrieveFlag' },
+      REQUEST_FLAG: {
+        actions: ['provideFlag', actions.log(() => 'provideFlag')],
+        guard: 'canProvideFlags',
+      },
+      RETURN_FLAG: { actions: 'retrieveFlag' },
       RESET: { actions: 'reset' },
       '*': {
-        actions: ({ event }) => console.log('flag event', event),
+        actions: actions.log(({ context, event }) => ({ context, event })),
       },
     },
   },
   {
     actions: {
-      provideFlag: assign({
-        availableFlags: ({ context, event }) => {
-          if (event.type === 'CELL.REQUEST_FLAG') {
-            const { cell } = event;
-            const cellState = event.cell.getSnapshot();
+      provideFlag: actions.pure(({ context, event }) => {
+        if (event.type === 'REQUEST_FLAG') {
+          event.cell.send({ type: 'PLANT_FLAG' });
 
-            if (cellState) {
-              console.log('flagger: REQUEST_FLAG – ADD_FLAG');
-              cell.send({ type: 'PLANT_FLAG' });
+          return assign({ usedFlags: context.usedFlags + 1 });
+        }
 
-              return context.availableFlags - 1;
-            } else {
-              console.log('flagger: REQUEST_FLAG');
-            }
-          }
-
-          return context.availableFlags;
-        },
+        // TODO: Worth sending an event here?
+        return;
       }),
-      retrieveFlag: assign({
-        availableFlags: ({ context, event }) => {
-          if (event.type === 'CELL.RETURN_FLAG') {
-            const { cell } = event;
-            console.log('flagger: RETURN_FLAG');
-            cell.send({ type: 'REMOVE_FLAG' });
+      retrieveFlag: actions.pure(({ context, event }) => {
+        if (event.type === 'RETURN_FLAG') {
+          event.cell.send({ type: 'REMOVE_FLAG' });
 
-            return context.availableFlags + 1;
-          }
+          return assign({ usedFlags: context.usedFlags - 1 });
+        }
 
-          return context.availableFlags;
-        },
+        return;
       }),
-      reset: assign({
-        availableFlags: 0,
-      }),
+      reset: assign({ usedFlags: 0 }),
     },
     guards: {
-      hasFlags: ({ context }) => context.availableFlags > 0,
+      canProvideFlags: ({ context }) => context.usedFlags < context.flags,
     },
   }
 );

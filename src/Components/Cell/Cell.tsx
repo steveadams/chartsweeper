@@ -3,8 +3,7 @@ import './Cell.css';
 import { P, match } from 'ts-pattern';
 import { useActor } from '@xstate/react';
 import classnames from 'classnames';
-import { CellMachine, CellMachineRef } from '../../machines/cellMachine';
-import { StateFrom } from 'xstate';
+import { CellMachineRef } from '../../machines/cellMachine';
 
 export interface CellProps {
   cell: CellMachineRef;
@@ -16,13 +15,10 @@ export const Cell: FC<CellProps> = ({ cell }) => {
   const toggleFlag = (e: React.MouseEvent) => {
     e.preventDefault();
 
-    if (cellState.can({ type: 'REQUEST_FLAG' })) {
-      send({ type: 'REQUEST_FLAG', cell });
-    }
-
-    if (cellState.can({ type: 'RETURN_FLAG' })) {
-      send({ type: 'RETURN_FLAG', cell });
-    }
+    match(cellState.value)
+      .with('covered', () => send({ type: 'REQUEST_FLAG' }))
+      .with('flagged', () => send({ type: 'RETURN_FLAG' }))
+      .otherwise(() => {});
   };
 
   const onClick = (e: React.MouseEvent) => {
@@ -32,8 +28,8 @@ export const Cell: FC<CellProps> = ({ cell }) => {
     if (e.metaKey) {
       toggleFlag(e);
     } else {
-      if (cellState.can({ type: 'TRAVERSE' })) {
-        send({ type: 'TRAVERSE' });
+      if (cellState.can({ type: 'REVEAL' })) {
+        send({ type: 'REVEAL' });
       }
     }
   };
@@ -42,36 +38,33 @@ export const Cell: FC<CellProps> = ({ cell }) => {
     e.preventDefault();
 
     if (e.button === 0) {
-      send({ type: 'START_REVEAL' });
+      send({ type: 'START_REVEALING' });
     }
   };
 
   const endReveal = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (cellState.matches({ value: 'revealing' })) {
-      send({ type: 'END_REVEAL' });
-    }
+
+    send({ type: 'STOP_REVEALING' });
   };
 
   const content = match(cellState)
     .with({ value: 'exploded' }, () => '*')
     .with({ value: 'flagged' }, () => '>')
-    .with(
-      { value: 'traversed' },
-      { value: 'untouched' },
-      { context: { adjacentMines: 0 } },
-      () => ' '
-    )
+    .with({ value: 'covered' }, { context: { adjacentMines: 0 } }, () => ' ')
     .with({ context: { adjacentMines: P.select() } }, (mines) => String(mines))
     .exhaustive();
 
   return (
     <button
-      className={classnames('cell', `cell--${cellState.value}`, {
+      className={classnames('cell', {
         'cell--mine': cellState.context.isMine,
-        [`cell--adjacent-${cellState.context.adjacentMines}`]:
-          cellState.matches('traversed'),
+        ['cell--flagged']: cellState.matches('flagged'),
+        ['cell--clear']: cellState.matches({ status: 'clear' }),
+        [`cell--adjacent-${cellState.context.adjacentMines} cell--scanned`]:
+          cellState.matches({ scan: 'complete' }),
       })}
+      disabled={cellState.done}
       type="button"
       onMouseDown={startReveal}
       onMouseUp={endReveal}
