@@ -1,4 +1,4 @@
-import { createMachine, assign, StateFrom } from 'xstate';
+import { createMachine, assign, StateFrom, ActorRefFrom } from 'xstate';
 import { fromCallback } from 'xstate/actors';
 
 interface TimerContext {
@@ -22,8 +22,9 @@ type TimerEvent =
 
 type TimerMachine = typeof timerMachine;
 export type TimerMachineState = StateFrom<TimerMachine>;
+export type TimerMachineRef = ActorRefFrom<TimerMachine>;
 
-export const timerMachine = createMachine<TimerContext, TimerEvent>(
+export const timerMachine = createMachine(
   {
     id: 'timer',
     initial: 'idle',
@@ -48,6 +49,7 @@ export const timerMachine = createMachine<TimerContext, TimerEvent>(
           TICK: {
             actions: ['incrementTime'],
           },
+          STOP: 'stopped',
           RESET: 'idle',
         },
 
@@ -70,11 +72,11 @@ export const timerMachine = createMachine<TimerContext, TimerEvent>(
       timeExpired: ({ context }) => context.elapsedTime >= context.duration,
     },
     actors: {
-      tick: fromCallback<TimerEvent>((sendBack) => {
+      tick: fromCallback<TimerEvent>(({ sendBack }) => {
         const interval = setInterval(() => sendBack({ type: 'TICK' }), 1000);
 
         return () => clearInterval(interval);
       }),
     },
-  }
+  },
 );

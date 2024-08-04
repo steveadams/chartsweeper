@@ -1,12 +1,13 @@
 import {
   ActorRefFrom,
-  actions,
   assign,
-  createMachine,
+  log,
+  not,
   sendParent,
   sendTo,
+  setup,
 } from 'xstate';
-import { Coordinates, makeCellKey } from '../lib/game';
+import { Coordinates, iterateAdjacentCells } from '../lib/cell';
 
 type FlagEvent =
   | { type: 'REQUEST_FLAG' }
@@ -15,213 +16,162 @@ type FlagEvent =
   | { type: 'REMOVE_FLAG' };
 
 type MineEvent =
-  | { type: 'SET_MINE' }
-  | { type: 'ADD_ADJACENT_MINE' }
   | { type: 'EXPLODE' }
-  | { type: 'REMOTE_DETONATE' };
+  | { type: 'DEFUSE' }
+  | { type: 'REVEAL' }
+  | { type: 'ARM' };
 
 export type CellEvent =
   | FlagEvent
   | MineEvent
   | { type: 'SCAN' }
-  | { type: 'SCAN_REQUEST'; cell: CellMachineRef }
-  | { type: 'REVEAL' }
-  | { type: 'START_REVEALING' }
-  | { type: 'STOP_REVEALING' }
+  | { type: 'UNCOVER' }
   | { type: 'RESET' };
 
 export type CellContext = {
   coordinates: Coordinates;
   isMine: boolean;
-  wasScanned: boolean;
+  alreadyScanned: boolean;
   adjacentMines: number;
 };
 
-export type CellMachine = ReturnType<typeof createCellMachine>;
+export type CellMachine = typeof cellMachine;
 export type CellMachineRef = ActorRefFrom<CellMachine>;
 
-export const createCellMachine = ({
-  coordinates,
-  adjacentMines,
-  isMine,
-}: CellContext) =>
-  createMachine<CellContext, CellEvent>(
-    {
-      id: 'cell',
-      context: {
-        coordinates,
-        isMine,
-        wasScanned: false,
-        adjacentMines,
+const defaultContext: CellContext = {
+  coordinates: { column: 0, row: 0 },
+  isMine: false,
+  alreadyScanned: false,
+  adjacentMines: 0,
+};
+
+export const cellMachine = setup({
+  types: {
+    context: {} as CellContext,
+    input: {} as CellContext,
+    events: {} as CellEvent,
+  },
+  actions: {
+    countAdjacentMines: assign({
+      adjacentMines: ({ context, system }) => {
+        let count = 0;
+        iterateAdjacentCells(context.coordinates, system, (cell) => {
+          const snapshot = cell.getSnapshot();
+          if (snapshot && snapshot.context.isMine) {
+            count += 1;
+          }
+        });
+
+        return count;
       },
-      initial: 'covered',
+    }),
+
+    markAsScanned: assign({ alreadyScanned: true }),
+
+    scanAdjacentCells: ({ context, system }) => {
+      iterateAdjacentCells(context.coordinates, system, (cell) => {
+        cell.send({ type: 'SCAN' });
+      });
+    },
+
+    requestFlag: sendTo(
+      ({ system }) => system.get('flagger'),
+      ({ self }) => ({
+        type: 'REQUEST_FLAG',
+        cell: self,
+      }),
+    ),
+
+    returnFlag: sendTo(
+      ({ system }) => system.get('flagger'),
+      ({ self }) => ({
+        type: 'RETURN_FLAG',
+        cell: self,
+      }),
+    ),
+
+    arm: assign({ isMine: true }),
+    defuse: assign({ isMine: false }),
+
+    reportClearedCell: sendParent({ type: 'CELL_CLEARED' }),
+    reportExplodedCell: sendParent(({ self }) => ({
+      type: 'MINE_SCANNED',
+      cell: self,
+    })),
+  },
+  guards: {
+    alreadyScanned: ({ context }) => context.alreadyScanned,
+    hasAdjacentMines: ({ context }) => context.adjacentMines > 0,
+    isMine: ({ context }) => context.isMine,
+  },
+}).createMachine({
+  id: 'cell',
+  context: ({ input }) => ({
+    ...defaultContext,
+    ...input,
+  }),
+  initial: 'covered',
+  on: {
+    REVEAL: {
+      target: '.revealed',
+      guard: 'isMine',
+    },
+  },
+  states: {
+    covered: {
       on: {
-        SCAN_REQUEST: {
-          actions: [
-            () => actions.log('SCAN_REQUEST'),
-            'externalScan',
-            'markScanned',
-            actions.log(() => 'externalScan'),
-          ],
+        REQUEST_FLAG: {
+          actions: 'requestFlag',
         },
-        ADD_ADJACENT_MINE: {
-          actions: ['addAdjacentMine', actions.log(() => 'addAdjacentMine')],
+        PLANT_FLAG: 'flagged',
+        UNCOVER: 'scanning',
+        SCAN: {
+          target: 'scanning',
+          guard: not('alreadyScanned'),
         },
-        REMOTE_DETONATE: {
-          target: '.exploded',
-          guard: 'isMine',
-        },
-      },
-      states: {
-        covered: {
-          on: {
-            REQUEST_FLAG: {
-              actions: ['requestFlag'],
-            },
-            PLANT_FLAG: 'flagged',
-            REVEAL: 'revealing',
-            SET_MINE: {
-              actions: 'setMine',
-            },
-          },
-        },
-        flagged: {
-          on: {
-            RETURN_FLAG: {
-              actions: 'returnFlag',
-            },
-            REMOVE_FLAG: 'covered',
-          },
-        },
-        revealing: {
-          always: [
-            { target: ['exploded'], actions: 'explode', guard: 'isMine' },
-            { target: ['clear'], actions: 'clear' },
-          ],
-        },
-        clear: {
-          entry: ['internalScan', 'markScanned'],
-          type: 'final',
-        },
-        exploded: {
-          type: 'final',
+        ARM: {
+          target: 'covered',
+          actions: 'arm',
         },
       },
     },
-    {
-      actions: {
-        markScanned: assign({
-          wasScanned: true,
-        }),
-        internalScan: actions.pure(({ context, event }) => {
-          if (event.type === 'REVEAL') {
-            const sends: ReturnType<typeof sendTo>[] = [];
-            const directions = [
-              [-1, -1],
-              [-1, 0],
-              [-1, 1],
-              [0, -1],
-              [0, 1],
-              [1, -1],
-              [1, 0],
-              [1, 1],
-            ];
-
-            for (const [dx, dy] of directions) {
-              const row = context.coordinates.row + dy;
-              const column = context.coordinates.column + dx;
-
-              // There are no negative coordinates on the board
-              if (row < 0 || column < 0) {
-                continue;
-              }
-
-              sends.push(
-                sendTo(makeCellKey({ row, column }), { type: 'SCAN_REQUEST' })
-              );
-            }
-
-            return sends;
-          }
-
-          return [];
-        }),
-        externalScan: actions.pure(({ context, event }) => {
-          console.log('externalScan at ', context.coordinates);
-          // Notify scan neighbour initiator that this cell contains a mine
-          if (event.type === 'SCAN_REQUEST' && event.cell && context.isMine) {
-            event.cell.send({ type: 'ADD_ADJACENT_MINE' });
-
-            return [];
-          }
-
-          if (context.isMine || context.wasScanned) {
-            console.log(
-              'return early, isMine or wasScanned',
-              context.isMine,
-              context.wasScanned
-            );
-
-            return [];
-          }
-
-          if (event.type === 'SCAN_REQUEST') {
-            const sends: ReturnType<typeof sendTo>[] = [];
-            const directions = [
-              [-1, -1],
-              [-1, 0],
-              [-1, 1],
-              [0, -1],
-              [0, 1],
-              [1, -1],
-              [1, 0],
-              [1, 1],
-            ];
-
-            for (const [dx, dy] of directions) {
-              const neighbourKey = makeCellKey({
-                row: context.coordinates.row + dy,
-                column: context.coordinates.column + dx,
-              });
-
-              console.log('send SCAN_REQUEST', neighbourKey);
-              sends.push(
-                sendTo(neighbourKey, {
-                  type: 'SCAN_REQUEST',
-                })
-              );
-            }
-
-            return sends;
-          }
-        }),
-        addAdjacentMine: assign({
-          adjacentMines: ({ context }) => context.adjacentMines + 1,
-        }),
-
-        requestFlag: sendTo(
-          ({ system }) => system.get('flagger'),
-          ({ self }) => ({ type: 'REQUEST_FLAG', cell: self })
-        ),
-
-        returnFlag: sendTo(
-          ({ system }) => system.get('flagger'),
-          ({ self }) => ({
-            type: 'RETURN_FLAG',
-            cell: self,
-          })
-        ),
-
-        setMine: assign({ isMine: true }),
-
-        clear: sendParent(({ self }) => ({
-          type: 'CELL_CLEARED',
-          cellKey: self.id,
-        })),
-        explode: sendParent({ type: 'MINE_REVEALED' }),
+    flagged: {
+      on: {
+        RETURN_FLAG: {
+          actions: 'returnFlag',
+        },
+        REMOVE_FLAG: 'covered',
       },
-      guards: {
-        isMine: ({ context }) => context.isMine,
+    },
+    scanning: {
+      entry: ['countAdjacentMines', 'markAsScanned'],
+      always: [
+        {
+          target: 'exploded',
+          guard: 'isMine',
+        },
+        {
+          target: 'uncovered',
+          actions: 'scanAdjacentCells',
+          guard: not('hasAdjacentMines'),
+        },
+        { target: 'uncovered' },
+      ],
+    },
+    uncovered: {
+      entry: 'reportClearedCell',
+    },
+    exploded: {
+      entry: 'reportExplodedCell',
+      on: {
+        DEFUSE: {
+          target: 'scanning',
+          actions: 'defuse',
+        },
       },
-    }
-  );
+    },
+    revealed: {
+      type: 'final',
+    },
+  },
+});

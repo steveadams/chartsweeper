@@ -1,10 +1,11 @@
 import {
-  createMachine,
   assign,
   StateFrom,
-  EventFrom,
-  ContextFrom,
-  actions,
+  sendTo,
+  ActorRefFrom,
+  setup,
+  assertEvent,
+  enqueueActions,
 } from 'xstate';
 import { CellMachineRef } from './cellMachine';
 
@@ -15,56 +16,66 @@ interface FlagContext {
 
 export type FlagMachine = typeof flagMachine;
 export type FlagMachineState = StateFrom<FlagMachine>;
+export type FlagMachineRef = ActorRefFrom<FlagMachine>;
+
 export type FlagEvent =
-  | { type: 'RESET' }
+  | { type: 'RESET'; flags: number }
   | { type: 'REQUEST_FLAG'; cell: CellMachineRef }
   | { type: 'RETURN_FLAG'; cell: CellMachineRef };
 
-export const flagMachine = createMachine<FlagContext, FlagEvent>(
-  {
-    id: 'flagger',
-    context: ({ input }: { input: Partial<FlagContext> }) => ({
-      flags: 0,
-      usedFlags: 0,
-      ...input,
+export const flagMachine = setup({
+  types: {
+    context: {} as FlagContext,
+    events: {} as FlagEvent,
+  },
+
+  actions: {
+    provideFlag: enqueueActions(({ context, event, enqueue }) => {
+      assertEvent(event, 'REQUEST_FLAG');
+      console.log('provide flag');
+
+      enqueue.sendTo(event.cell, { type: 'PLANT_FLAG' });
+      enqueue.assign({ usedFlags: context.usedFlags + 1 });
     }),
-    on: {
-      REQUEST_FLAG: {
-        actions: ['provideFlag', actions.log(() => 'provideFlag')],
-        guard: 'canProvideFlags',
+    retrieveFlag: enqueueActions(({ context, event, enqueue }) => {
+      assertEvent(event, 'RETURN_FLAG');
+      console.log('return flag');
+
+      enqueue.sendTo(event.cell, { type: 'REMOVE_FLAG' });
+      enqueue.assign({ usedFlags: context.usedFlags - 1 });
+    }),
+    reset: assign({
+      flags: ({ event }) => {
+        assertEvent(event, 'RESET');
+
+        return event.flags;
       },
-      RETURN_FLAG: { actions: 'retrieveFlag' },
-      RESET: { actions: 'reset' },
-      '*': {
-        actions: actions.log(({ context, event }) => ({ context, event })),
-      },
+      usedFlags: 0,
+    }),
+  },
+
+  guards: {
+    canProvideFlags: ({ context }) => context.usedFlags < context.flags,
+  },
+}).createMachine({
+  id: 'flagger',
+  context: ({ input }) => ({
+    flags: 0,
+    usedFlags: 0,
+    ...input,
+  }),
+  initial: 'idle',
+  states: {
+    idle: {
+      entry: [() => console.log('flagger idle')],
     },
   },
-  {
-    actions: {
-      provideFlag: actions.pure(({ context, event }) => {
-        if (event.type === 'REQUEST_FLAG') {
-          event.cell.send({ type: 'PLANT_FLAG' });
-
-          return assign({ usedFlags: context.usedFlags + 1 });
-        }
-
-        // TODO: Worth sending an event here?
-        return;
-      }),
-      retrieveFlag: actions.pure(({ context, event }) => {
-        if (event.type === 'RETURN_FLAG') {
-          event.cell.send({ type: 'REMOVE_FLAG' });
-
-          return assign({ usedFlags: context.usedFlags - 1 });
-        }
-
-        return;
-      }),
-      reset: assign({ usedFlags: 0 }),
+  on: {
+    REQUEST_FLAG: {
+      actions: ['provideFlag'],
+      guard: 'canProvideFlags',
     },
-    guards: {
-      canProvideFlags: ({ context }) => context.usedFlags < context.flags,
-    },
-  }
-);
+    RETURN_FLAG: { actions: 'retrieveFlag' },
+    RESET: { actions: 'reset' },
+  },
+});

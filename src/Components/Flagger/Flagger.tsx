@@ -1,13 +1,12 @@
 import { FC } from 'react';
-import { selectAvailableFlags } from '../../Context/selectors';
-import { GameMachineContext } from '../../Context/GameMachineContext';
+import { GameContext } from '../../Context/GameContext';
 import { useSelector } from '@xstate/react';
 
 export const Flagger: FC = () => {
-  const [gameState] = GameMachineContext.useActor();
+  const flagger = GameContext.useSelector((state) => state.children.flagger);
   const availableFlags = useSelector(
-    gameState.children.flagger,
-    selectAvailableFlags
+    flagger,
+    (state) => (state?.context?.flags || 0) - (state?.context?.usedFlags || 0),
   );
 
   return (

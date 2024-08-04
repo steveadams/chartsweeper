@@ -1,18 +1,24 @@
 import { FC } from 'react';
 import { Cell } from '../Cell/Cell';
-import { RenderCount } from '../RenderCount';
-import { GameMachineContext } from '../../Context/GameMachineContext';
+import { GameContext } from '../../Context/GameContext';
 import { selectGrid } from '../../Context/selectors';
-import { useWhatChanged } from '@simbathesailor/use-what-changed';
 
 export const Grid: FC = () => {
-  const grid = GameMachineContext.useSelector(selectGrid);
+  // const { send } = GameContext.useActorRef();
+  const grid = GameContext.useSelector(selectGrid);
+
+  // const setUncovering = () => send({ type: 'STARTED_UNCOVERING' });
+  // const unsetUncovering = () => send({ type: 'STOPPED_UNCOVERING' });
 
   return (
-    <main className="grid">
-      <RenderCount label="grid" />
+    <main
+      className="flex flex-col gap-2"
+      // onMouseDown={setUncovering}
+      // onMouseLeave={unsetUncovering}
+      // onMouseUp={unsetUncovering}
+    >
       {grid.map((row, idx) => (
-        <div key={`row-${idx}`}>
+        <div className={`flex flex-row gap-2 row-${idx}`} key={`row-${idx}`}>
           {row.map((cell) => (
             <Cell key={cell.id} cell={cell} />
           ))}

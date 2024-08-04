@@ -1,5 +1,7 @@
 ## Chartsweeper
 
+https://codesandbox.io/s/grass-shader-5xho4?file=/src/App.js
+
 This is a clone of the classic game Minesweeper. It's implemented using TypeScript and React, using state charts ([X State](https://github.com/statelyai/xstate)) to manage game state and transitions.
 
 _TODO: Replace with actual gameplay_

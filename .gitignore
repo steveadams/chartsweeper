@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# XState typegen (generated on postinstall or manually)
+*/**/*.typegen.ts

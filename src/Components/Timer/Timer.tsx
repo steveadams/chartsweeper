@@ -1,11 +1,11 @@
 import { FC } from 'react';
-import { selectElapsedTime } from '../../Context/selectors';
-import { GameMachineContext } from '../../Context/GameMachineContext';
+import { selectElapsedTime, selectTimer } from '../../Context/selectors';
+import { GameContext } from '../../Context/GameContext';
 import { useSelector } from '@xstate/react';
 
 export const Timer: FC = () => {
-  const [gameState] = GameMachineContext.useActor();
-  const elapsedTime = useSelector(gameState.children.timer, selectElapsedTime);
+  const timerRef = GameContext.useSelector(selectTimer);
+  const elapsedTime = useSelector(timerRef, selectElapsedTime);
 
   return (
     <div className="timer">
