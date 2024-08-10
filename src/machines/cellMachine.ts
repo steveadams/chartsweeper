@@ -1,6 +1,8 @@
 import {
   ActorRefFrom,
+  assertEvent,
   assign,
+  enqueueActions,
   log,
   not,
   sendParent,
@@ -25,6 +27,8 @@ export type CellEvent =
   | FlagEvent
   | MineEvent
   | { type: 'SCAN' }
+  | { type: 'UNCOVERING' }
+  | { type: 'UNCOVERING_STOPPED' }
   | { type: 'UNCOVER' }
   | { type: 'RESET' };
 
@@ -73,6 +77,19 @@ export const cellMachine = setup({
         cell.send({ type: 'SCAN' });
       });
     },
+
+    uncovering: enqueueActions(({ event, enqueue, system }) => {
+      assertEvent(event, 'UNCOVERING');
+
+      const face = system.get('face');
+      enqueue.sendTo(face, { type: 'CLICK' });
+    }),
+    uncoveringStopped: enqueueActions(({ event, enqueue, system }) => {
+      assertEvent(event, 'UNCOVERING_STOPPED');
+
+      const face = system.get('face');
+      enqueue.sendTo(face, { type: 'RESET' });
+    }),
 
     requestFlag: sendTo(
       ({ system }) => system.get('flagger'),
@@ -124,6 +141,12 @@ export const cellMachine = setup({
           actions: 'requestFlag',
         },
         PLANT_FLAG: 'flagged',
+        UNCOVERING: {
+          actions: 'uncovering',
+        },
+        UNCOVERING_STOPPED: {
+          actions: 'uncoveringStopped',
+        },
         UNCOVER: 'scanning',
         SCAN: {
           target: 'scanning',

@@ -1,12 +1,19 @@
 import type { GameMachineContext } from '../machines/gameMachine';
 import { CellContext, CellMachineRef } from '../machines/cellMachine';
 import { FC } from 'react';
-import { Dizzy, Scared, Smile } from '../Components/Icons/Faces';
+import { Dizzy, Scared, Smile, Stars } from '../Components/Icons/Faces';
 
 export const presets: (GameMachineContext['config'] & {
   name: string;
   Face: FC;
 })[] = [
+  {
+    name: 'Default',
+    Face: Stars,
+    mines: 10,
+    width: 10,
+    height: 10,
+  },
   {
     name: 'Miner Difficulty',
     Face: Smile,

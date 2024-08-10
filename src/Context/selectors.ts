@@ -1,3 +1,4 @@
+import { FaceState } from '../machines/faceLogic';
 import { FlagMachineRef } from '../machines/flagMachine';
 import type { GameMachineState } from '../machines/gameMachine';
 import type {
@@ -9,7 +10,8 @@ export const selectGrid = (state: GameMachineState) => state.context.grid;
 
 export const selectStateValue = (state: GameMachineState) => state.value;
 
-export const selectFace = (state: GameMachineState) => state.context.face;
+export const selectFace = (s: GameMachineState) => s.children.face;
+export const selectExpression = (s: FaceState) => s.expression;
 
 export const selectAvailableFlags = (state: GameMachineState) => {
   const flagger = state.children.flagger as FlagMachineRef;

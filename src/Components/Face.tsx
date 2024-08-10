@@ -1,19 +1,22 @@
 import { FC } from 'react';
-import { GameContext } from '../../Context/GameContext';
-import { P, match } from 'ts-pattern';
-import { selectFace } from '../../Context/selectors';
-import { Dizzy, Scared, Smile, Stars } from '../Icons/Faces';
+import { GameContext } from '../Context/GameContext';
+import { match } from 'ts-pattern';
+import { selectFace } from '../Context/selectors';
+import { Dizzy, Scared, Smile, Stars } from './Icons/Faces';
 
 export const Face: FC = () => {
   const gameRef = GameContext.useActorRef();
-  const reset = () => gameRef.send({ type: 'GAME.RESET' });
-  const state = GameContext.useSelector(selectFace);
+  const face = GameContext.useSelector(selectFace);
 
-  const FaceIcon = match(state)
+  const expression = face?.getSnapshot()?.context.expression;
+
+  const reset = () => gameRef.send({ type: 'GAME.RESET' });
+
+  const FaceIcon = match(expression)
     .with('neutral', () => Smile)
     .with('scared', () => Scared)
-    .with('win', () => Stars)
-    .with('lose', () => Dizzy)
+    .with('happy', () => Stars)
+    .with('dead', () => Dizzy)
     .exhaustive();
 
   return (

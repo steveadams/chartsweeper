@@ -1,8 +1,8 @@
 import { FC } from 'react';
 import { Timer } from './Timer/Timer';
-import { Flagger } from './Flagger/Flagger';
-import { Face } from './Face/Face';
-import { Grid } from './Grid/Grid';
+import { Flagger } from './Flagger';
+import { Face } from './Face';
+import { Grid } from './Grid';
 import { SettingsDialog } from './Dialog/SettingsDialog';
 
 const ChartSweeper: FC = () => (

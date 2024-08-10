@@ -2,26 +2,19 @@ import {
   assertEvent,
   assign,
   enqueueActions,
+  not,
   sendTo,
   setup,
   StateFrom,
 } from 'xstate';
-import { CellMachine, cellMachine, CellMachineRef } from './cellMachine';
+
+import type { CellMachineRef } from './cellMachine';
+import { cellMachine } from './cellMachine';
 import { generateGrid } from '../lib/game';
 import { timerMachine } from './timerMachine';
 import { flagMachine } from './flagMachine';
-import faceLogic from './faceMachine';
+import faceLogic, { FaceState } from './faceLogic';
 import { makeCellKey } from '../lib/cell';
-
-export type GameEvent =
-  | { type: 'GAME.CONFIGURE'; config: GameMachineContext['config'] }
-  | { type: 'GAME.RESET' }
-  | { type: 'GAME.LOSE'; win: boolean }
-  | { type: 'GAME.TICK' }
-  | { type: 'GAME.TIMES_UP' }
-  // Events sent from cells
-  | { type: 'CELL_CLEARED' }
-  | { type: 'MINE_SCANNED'; cell: CellMachineRef };
 
 interface GameConfig {
   width: number;
@@ -29,35 +22,48 @@ interface GameConfig {
   mines: number;
 }
 
-const defaultConfig: GameConfig = {
+export interface GameMachineContext {
+  config: GameConfig;
+  grid: CellMachineRef[][];
+  clearedCells: number;
+  face: FaceState['expression'];
+}
+
+export interface GameTypes {
+  context: {
+    config: GameConfig;
+    grid: CellMachineRef[][];
+    clearedCells: number;
+    face: FaceState['expression'];
+  };
+  input: GameConfig;
+  events:
+    | { type: 'GAME.CONFIGURE'; config: GameTypes['context']['config'] }
+    | { type: 'GAME.RESET' }
+    | { type: 'GAME.LOSE'; win: boolean }
+    | { type: 'GAME.TICK' }
+    | { type: 'GAME.TIMES_UP' }
+    // Events sent from cells
+    | { type: 'CELL_CLEARED' }
+    | { type: 'MINE_SCANNED'; cell: CellMachineRef };
+  children: {
+    timer: 'timer';
+    flagger: 'flagger';
+    face: 'face';
+  };
+}
+
+const defaultConfig: GameTypes['context']['config'] = {
   width: 10,
   height: 10,
   mines: 10,
 };
 
-type FaceEmotion = 'neutral' | 'win' | 'lose' | 'scared';
-
-export interface GameMachineContext {
-  config: GameConfig;
-  grid: CellMachineRef[][];
-  clearedCells: number;
-  face: FaceEmotion;
-}
-
 export type GameMachine = typeof gameMachine;
 export type GameMachineState = StateFrom<GameMachine>;
 
 export const gameMachine = setup({
-  types: {
-    context: {} as GameMachineContext,
-    input: {} as GameConfig,
-    events: {} as GameEvent,
-    children: {} as {
-      timer: 'timer';
-      flagger: 'flagger';
-      face: 'face';
-    },
-  },
+  types: {} as GameTypes,
   actions: {
     setConfiguration: assign({
       config: ({ event }) => {
@@ -86,22 +92,15 @@ export const gameMachine = setup({
     }),
 
     swapMineCoordinates: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'MINE_SCANNED') {
-        return;
-      }
+      assertEvent(event, 'MINE_SCANNED');
 
       const { cell } = event;
       const { config } = context;
-      const snapshot = cell.getSnapshot();
-
-      if (!snapshot) {
-        throw Error('Cell snapshot is undefined');
-      }
 
       if (config.width * config.height - config.mines === 0) {
         // No swap is possible, just defuse the mine and the player wins.
         // TODO: Actually need to update game config as well to allow a win.
-        enqueue(sendTo(event.cell, { type: 'DEFUSE' }));
+        enqueue.sendTo(event.cell, { type: 'DEFUSE' });
         return;
       }
 
@@ -122,7 +121,8 @@ export const gameMachine = setup({
           otherCellState.matches('covered') &&
           !otherCellState.context.isMine
         ) {
-          enqueue(sendTo(otherCell, { type: 'ARM' }));
+          enqueue.sendTo(cell, { type: 'DEFUSE' });
+          enqueue.sendTo(otherCell, { type: 'ARM' });
           return;
         }
       }
@@ -149,6 +149,9 @@ export const gameMachine = setup({
         flags: context.config.mines,
       }),
     ),
+
+    win: sendTo(({ system }) => system.get('face'), { type: 'WIN' }),
+    lose: sendTo(({ system }) => system.get('face'), { type: 'LOSE' }),
   },
   guards: {
     clearedACell: ({ context }) => context.clearedCells > 0,
@@ -206,6 +209,7 @@ export const gameMachine = setup({
         // Ensure a first click on a mine doesn't cause an immediate loss
         MINE_SCANNED: {
           actions: 'swapMineCoordinates',
+          guard: not('clearedACell'),
         },
         CELL_CLEARED: {
           target: 'playing',
@@ -227,9 +231,11 @@ export const gameMachine = setup({
       },
       exit: 'stopTimer',
     },
-    win: {},
+    win: {
+      entry: ['showAllMines', 'win'],
+    },
     lose: {
-      entry: 'showAllMines',
+      entry: ['showAllMines', 'lose'],
     },
   },
 });

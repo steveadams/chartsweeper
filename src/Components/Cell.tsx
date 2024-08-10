@@ -1,10 +1,14 @@
 import { FC } from 'react';
-import { CellMachineRef } from '../../machines/cellMachine';
-import classnames from 'classnames';
-import { match } from 'ts-pattern';
-import { Bomb } from '../Icons/Bomb';
-import { Flag } from '../Icons/Flag';
+import { P, match } from 'ts-pattern';
+import { CellMachineRef } from '../machines/cellMachine';
 import { useSelector } from '@xstate/react';
+import classnames from 'classnames';
+import { Flag } from './Icons/Flag';
+import { Bomb } from './Icons/Bomb';
+
+export interface CellProps {
+  cell: CellMachineRef;
+}
 
 interface BaseCellProps extends React.HTMLAttributes<HTMLButtonElement> {}
 
@@ -19,6 +23,18 @@ interface UncoveredCellProps extends BaseCellProps {
 interface ExplodedCellProps extends BaseCellProps {
   red: boolean;
 }
+
+export const Cell: FC<CellProps> = ({ cell }) => {
+  const state = useSelector(cell, (state) => state);
+
+  return match(state)
+    .with({ value: 'uncovered', context: P.select() }, (context) => (
+      <UncoveredCell adjacentMines={context.adjacentMines} />
+    ))
+    .with({ value: 'revealed' }, () => <ExplodedCell red={false} />)
+    .with({ value: 'exploded' }, () => <ExplodedCell red={true} />)
+    .otherwise(() => <CoveredCell cell={cell} />);
+};
 
 export const BaseCell: FC<BaseCellProps> = ({
   children,
@@ -41,6 +57,7 @@ export const CoveredCell: FC<LiveCellProps> = ({ cell }) => {
   const state = useSelector(cell, (state) => state);
 
   const uncover = (e: React.MouseEvent) => cell.send({ type: 'UNCOVER' });
+
   const requestFlag = (e: React.MouseEvent) => {
     e.preventDefault();
     cell.send({ type: 'REQUEST_FLAG' });
@@ -53,13 +70,32 @@ export const CoveredCell: FC<LiveCellProps> = ({ cell }) => {
   const onClick = (e: React.MouseEvent) => {
     e.preventDefault();
 
-    console.log('onClick', cell.getSnapshot());
+    e.metaKey ? requestFlag(e) : uncover(e);
+  };
 
-    if (e.metaKey) {
-      requestFlag(e);
-    } else {
-      uncover(e);
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) {
+      console.log('onMouseDown cancelled');
+      return;
     }
+
+    cell.send({ type: 'UNCOVERING' });
+  };
+
+  const onMouseUp = (e: React.MouseEvent) => {
+    if (e.button !== 0) {
+      return;
+    }
+
+    cell.send({ type: 'UNCOVERING_STOPPED' });
+  };
+
+  const onMouseOut = (e: React.MouseEvent) => {
+    if (e.buttons !== 1) {
+      return;
+    }
+
+    cell.send({ type: 'UNCOVERING_STOPPED' });
   };
 
   return (
@@ -68,6 +104,9 @@ export const CoveredCell: FC<LiveCellProps> = ({ cell }) => {
         'bg-yellow-400 ring-orange-600 ring-inset ring-opacity-20 hover:scale-105 transition-transform duration-100',
         { 'bg-red-600': state.context.isMine },
       )}
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
+      onMouseOut={onMouseOut}
       onClick={onClick}
       onContextMenu={state.matches('flagged') ? returnFlag : requestFlag}
     >

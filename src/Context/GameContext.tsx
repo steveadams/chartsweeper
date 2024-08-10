@@ -3,7 +3,7 @@ import { gameMachine } from '../machines/gameMachine';
 import { presets } from '../lib/game';
 import { timerMachine } from '../machines/timerMachine';
 import { flagMachine } from '../machines/flagMachine';
-import faceLogic from '../machines/faceMachine';
+import faceLogic from '../machines/faceLogic';
 
 export const GameContext = createActorContext(
   gameMachine.provide({

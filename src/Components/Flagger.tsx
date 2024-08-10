@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import { GameContext } from '../../Context/GameContext';
+import { GameContext } from '../Context/GameContext';
 import { useSelector } from '@xstate/react';
 
 export const Flagger: FC = () => {
